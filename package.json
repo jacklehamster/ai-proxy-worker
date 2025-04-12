@@ -12,5 +12,7 @@
     "typescript": "latest",
     "wrangler": "latest"
   },
-  "dependencies": {}
+  "dependencies": {
+    "g": "^2.0.1"
+  }
 }

@@ -8,7 +8,7 @@ import { Adapter } from "./adapter";
 function transformToGeminiFormat(payload: AIProxyRequest): any {
   return {
     contents: payload.messages?.map((msg) => ({
-      role: msg.role,
+      role: msg.role === "user" ? "user" : "model",
       parts: [{ text: msg.content }],
     })),
   };

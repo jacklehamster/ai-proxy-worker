@@ -1,52 +1,50 @@
-import type { } from "openai"
+import { fixModel } from "./utils/fixModel";
+import { EnvironmentVariables } from "./types/environment-vars";
+import { getModelConfig } from "./utils/model-config";
+import type { ChatCompletion } from "openai/resources/chat/completions";
 
-interface AIProxyRequest {
+export interface AIProxyRequest {
   model: string;
-}
-
-interface ChatServer {
-  url: string;
-}
-
-function getModelConfig(model: string): ChatServer {
-  switch (model) {
-    case "deepseek-chat":
-      return {
-        url: "https://api.deepseek.com/chat/completions",
-      };
-    default:
-      return {
-        url: "https://api.openai.com/v1/chat/completions",
-      };
-  }
+  messages: { role: string; content: string }[];
 }
 
 export default {
-  async fetch(request: Request, env: any) {
+  async fetch(request: Request, env: EnvironmentVariables) {
     const url = new URL(request.url);
-    if (url.pathname === '/favicon.ico') {
+
+    if (url.pathname === "/favicon.ico") {
       return Response.redirect("https://ai-proxy.dobuki.net/icon.png");
     }
 
     if (request.method !== "POST") {
       return new Response("Only POST supported", { status: 405 });
     }
-    const body = await request.text();
 
-    const payload: AIProxyRequest = JSON.parse(body);
-    const config = getModelConfig(payload.model);
+    const payload: AIProxyRequest = await request.json();
+    payload.model = fixModel(payload.model);
+    const config = getModelConfig(payload.model, env);
+
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    if (config.api_key) {
+      headers["Authorization"] = `Bearer ${config.api_key}`;
+    }
+
+    const requestBody = JSON.stringify(config.adapter.transformRequest(payload));
 
     const response = await fetch(config.url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      },
-      body,
+      headers,
+      body: requestBody,
     });
-    console.log(response);
+    const responseText = await response.text();
 
-    return new Response(response.body, {
+    const result = JSON.parse(responseText);
+
+    const finalOutput: ChatCompletion = config.adapter.transformToOpenAIResponse(result, payload.model);
+
+    return new Response(JSON.stringify(finalOutput, null, 1), {
       status: response.status,
       headers: {
         "Content-Type": "application/json",
